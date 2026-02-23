@@ -1,0 +1,12 @@
+# Fallback profile (same schema as scan_config.yaml)
+target: scanme.nmap.org
+llm:
+  type: remote
+  openai_api_key_file: config/openai.key.ignore
+run_nmap_sudo: false
+nmap_execution: true
+cooling: true
+cooling_seconds: 4
+max_steps: 30
+max_nmap_runs: 25
+max_elapsed_seconds: 3600

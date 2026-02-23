@@ -1,0 +1,15 @@
+---
+description: Project layout — all development under dev/app; backend and frontend under app
+alwaysApply: true
+---
+
+# Project structure
+
+- **Workspace root:** `/home/vlabs/tensor42/t42/probescout/development`. Open Cursor with this directory.
+- **App root:** Everything lives under `dev/app/`. Backend and frontend are under app, not at top level.
+- **Backend:** `dev/app/backend/` — Python, RestAPI, config, agent loop, nmap runner, guardrails. No backend code outside this tree.
+- **Frontend:** `dev/app/frontend/` — Node.js (Vite), single screen: target input, Execute, status box.
+- **Docs:** Implementation spec in `dev/app/backend/docs/`. Other .md in `dev/app/wiki/docs/`.
+- **Cursor rules:** `.cursor/rules/` at workspace root; `dev/app/.cursor/rules/` for app-level rules.
+
+When referring to the codebase, use `dev/app/`; for backend use `dev/app/backend/`, for frontend use `dev/app/frontend/`.

@@ -1,0 +1,12 @@
+---
+description: Mother rule — follow all rules in backend and frontend harness_rules
+alwaysApply: true
+---
+
+# Mother rule
+
+Follow all rules defined in **dev/app/backend/harness_rules/** and **dev/app/frontend/harness_rules/**.
+
+When making changes or adding features:
+- For backend work: read and apply every rule file in `dev/app/backend/harness_rules/` (MOTHER.md, md-files-location.md, conventions.md, backend-authority.md).
+- For frontend work: read and apply every rule file in `dev/app/frontend/harness_rules/` (MOTHER.md, md-files-location.md, conventions.md).

@@ -1,0 +1,389 @@
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --warn: #d29922;
+  --error: #f85149;
+  --font: 'JetBrains Mono', 'Fira Code', 'Consolas', ui-monospace, monospace;
+  --scrollbar-track: rgba(22, 27, 34, 0.6);
+  --scrollbar-thumb: rgba(88, 166, 255, 0.25);
+  --scrollbar-thumb-hover: rgba(88, 166, 255, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Modern, minimal scrollbars (thin, transparent) */
+.panel-body,
+.panel-body pre,
+.output-pre,
+.log-pre,
+.progress-pre,
+.stages-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+.panel-body::-webkit-scrollbar,
+.panel-body pre::-webkit-scrollbar,
+.output-pre::-webkit-scrollbar,
+.log-pre::-webkit-scrollbar,
+.progress-pre::-webkit-scrollbar,
+.stages-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.panel-body::-webkit-scrollbar-track,
+.panel-body pre::-webkit-scrollbar-track,
+.output-pre::-webkit-scrollbar-track,
+.log-pre::-webkit-scrollbar-track,
+.progress-pre::-webkit-scrollbar-track,
+.stages-list::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 4px;
+}
+.panel-body::-webkit-scrollbar-thumb,
+.panel-body pre::-webkit-scrollbar-thumb,
+.output-pre::-webkit-scrollbar-thumb,
+.log-pre::-webkit-scrollbar-thumb,
+.progress-pre::-webkit-scrollbar-thumb,
+.stages-list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+.panel-body::-webkit-scrollbar-thumb:hover,
+.panel-body pre::-webkit-scrollbar-thumb:hover,
+.output-pre::-webkit-scrollbar-thumb:hover,
+.log-pre::-webkit-scrollbar-thumb:hover,
+.progress-pre::-webkit-scrollbar-thumb:hover,
+.stages-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+.panel-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-header {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.app-header h1 {
+  margin: 0 0 0.2rem 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* 2x2 + full-width log row */
+.panels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-auto-flow: row;
+  gap: 1px;
+  background: var(--border);
+  min-height: 0;
+}
+
+.panel-log {
+  grid-column: 1 / -1;
+  min-height: 200px;
+  height: 320px;
+  max-height: 70vh;
+  position: relative;
+}
+
+.resize-handle {
+  flex-shrink: 0;
+  height: 6px;
+  background: var(--border);
+  cursor: ns-resize;
+  position: relative;
+  z-index: 1;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+  background: var(--accent);
+}
+
+.resize-handle-log {
+  margin-bottom: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.panel-title {
+  flex-shrink: 0;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-hint {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.68rem;
+  color: var(--muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  line-height: 1.3;
+}
+
+.panel-body {
+  flex: 1;
+  padding: 0.6rem;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Panel 1: Controls */
+.panel-controls .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.panel-controls label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#target {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+#target:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#execute {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+#execute:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+#execute:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#copy-report {
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+#copy-report:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.status-line {
+  margin-top: 0.25rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.status-line.running {
+  color: var(--accent);
+}
+
+.status-line.done {
+  color: var(--success);
+}
+
+.status-line.error {
+  color: var(--error);
+}
+
+.current-activity {
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  min-height: 1.2rem;
+}
+
+.current-activity:empty {
+  border-left-color: var(--border);
+  color: var(--muted);
+}
+
+.current-activity:empty::before {
+  content: 'No activity yet';
+  color: var(--muted);
+  font-style: italic;
+}
+
+.api-status {
+  margin-top: 0.35rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.api-status.api-status-error {
+  color: var(--error);
+}
+
+/* Panel 2: Progress */
+.progress-pre {
+  margin: 0;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+}
+
+/* Panel 3: Stages list */
+.stages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stage-item {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border-left: 3px solid var(--border);
+  background: var(--surface);
+  cursor: default;
+}
+
+.stage-item.current {
+  border-left-color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.stage-item.done {
+  border-left-color: var(--success);
+}
+
+.stage-item .stage-label {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.stage-item .stage-id {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+}
+
+.stage-item .stage-started {
+  color: var(--muted);
+  font-size: 0.7rem;
+  margin-left: 0.5rem;
+}
+
+/* Panel 4: Output */
+.output-pre {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--muted);
+  max-height: 100%;
+  overflow: auto;
+}
+
+.output-pre.empty::before {
+  content: 'No output yet. Run a scan.';
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Panel 5: Log (backend-owned log file lines) */
+.log-pre {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--muted);
+  overflow: auto;
+}
+
+.log-pre.empty::before {
+  content: 'No log yet.';
+  color: var(--muted);
+  font-style: italic;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
