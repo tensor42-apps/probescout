@@ -28,15 +28,15 @@
 
 - **Action:** A single, allowlisted operation. Identified by a string **action_id**.
 - **Allowed action_ids (v1):**  
-  `host_reachability`, `wait`, `done`, `port_scan_1_100`, `port_scan_1_1000`, `port_scan_1_65535`, `service_detect`, `os_fingerprint`.
+  `host_reachability`, `wait`, `done`, `port_scan`, `service_detect`, `os_fingerprint`.
 - **Meaning:**
   - **host_reachability** — Check if target is up (nmap `-sn`).
   - **wait** — Sleep (cooling); no nmap.
   - **done** — End the scan.
-  - **port_scan_1_100** / **port_scan_1_1000** / **port_scan_1_65535** — TCP SYN port scan over the given range.
-  - **service_detect** — Version detection (nmap `-sV`).
+  - **port_scan** — TCP SYN scan (-sS) with `-p <range>`. Range is AI-proposed (e.g. "1-1024", "22,80,443"); validated format only. Requires run_nmap_sudo: true; otherwise engine raises.
+  - **service_detect** — Version detection (nmap `-sV`) on open ports. Requires run_nmap_sudo: true.
   - **os_fingerprint** — OS detection (nmap `-O`).
-- **Defined in code:** `dev/app/backend/action_menu.py` — `ALL_ACTION_IDS` and the mapping from each action_id to behavior (nmap argv or wait/done).
+- **Defined in code:** `dev/app/backend/action_menu.py` — intent_to_action_id, get_nmap_argv (with port_range for port_scan).
 
 ---
 
@@ -48,8 +48,8 @@
 - **Rules:**
   - **Before any scan:** menu = `[host_reachability, wait, done]`.
   - **After host_reachability with host down (no_response):** menu = `[wait, done]` (nothing else to do).
-  - **After host_reachability with host up (or any later state):** menu = `[port_scan_1_100, port_scan_1_1000, port_scan_1_65535, service_detect, os_fingerprint, wait, done]` (no host_reachability anymore).
-- The AI **never** sees actions outside this list for the current turn. It **never** invents new action_ids.
+  - **After host_reachability with host up (or any later state):** AI may propose `port_scan` with any valid `range` param (e.g. "1-1024"), or service_detect, os_fingerprint, wait, done.
+- The AI proposes intents with params; we validate and map to action_id. No fixed menu; no fixed port ranges.
 
 ---
 

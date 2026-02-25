@@ -8,10 +8,33 @@ __pycache__/
 node_modules/
 dist/
 .DS_Store
+.cursor/
+
+# Logs and runtime output (can contain target info, commands, partial responses)
 *.log
 logs/
-# Do not commit API keys
-config/openai.key.ignore
-*.key.ignore
+app/backend/logs/
+
+# Scan results, reports, and nmap artifacts (targets, open ports, versions)
+**/report.txt
+**/llm_log.txt
+**/nmap_xml_debug.txt
+**/last_port_scan.xml
+app/backend/testing/run_result_*.txt
+**/scan_*_results.json
+# nmap XML output (under logs/ or app/backend/logs/) already ignored above
+
+# Secrets and credentials — never commit
 .env
-.env.local
+.env.*
+!.env.example
+config/openai.key.ignore
+**/config/openai.key*
+**/*.key.ignore
+*.key
+*.key.ignore
+**/*token*
+**/*secret*
+**/*credentials*
+**/.credentials
+*.pem

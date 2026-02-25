@@ -98,7 +98,7 @@ Everything lives under **`dev/app/`**. Backend and frontend are under app.
 - `open_ports: List[Tuple[int, str]]` — (port, protocol). Merged from all port scans; protocol default "tcp".
 - `services: List[Tuple[int, str, Optional[str], Optional[str]]]` — (port, protocol, service_name, version). From service_detect run.
 - `os_fingerprint_done: bool` — True if action `os_fingerprint` was run (regardless of result).
-- `scans_run: List[str]` — Ordered list of action_id that were executed (e.g. `["host_reachability", "port_scan_1_100"]`).
+- `scans_run: List[str]` — Ordered list of action_id that were executed (e.g. `["host_reachability", "port_scan"]`).
 - `nmap_run_count: int` — Number of nmap invocations so far (for budget).
 
 **Initial state:** target = config target; host_reachability = "unknown"; host_addr, hostname = None; open_ports, services = []; os_fingerprint_done = False; scans_run = []; nmap_run_count = 0.
@@ -122,33 +122,17 @@ Definitions: host_known = (host_reachability != "unknown"). ports_known = (len(o
 
 - If host_reachability == "no_response": return True (nothing more to do).
 - If host_reachability != "up": return False.
-- Return (ports_known and services_known and os_known). Where ports_known = len(open_ports) > 0 or "port_scan_1_100" in scans_run or "port_scan_1_1000" in scans_run or "port_scan_1_65535" in scans_run; services_known = "service_detect" in scans_run; os_known = os_fingerprint_done.
+- Return (services_known and os_known). Where services_known = "service_detect" in scans_run or "service_detect_common" in scans_run; os_known = os_fingerprint_done. (No fixed port ranges; goal achieved when LLM has run service_detect and os_fingerprint.)
 
 ---
 
 ## 4. Action menu and engine mapping
 
-**Allowed action_id set (v1):** `host_reachability`, `wait`, `done`, `port_scan_1_100`, `port_scan_1_1000`, `port_scan_1_65535`, `service_detect`, `os_fingerprint`.
+**Allowed action_id set:** `host_reachability`, `wait`, `done`, `port_scan`, `service_detect`, `os_fingerprint`.
 
-**Current menu (which actions are valid this turn):**
+**Port-scan:** AI proposes intent port_scan with param `range` (any valid nmap -p spec: e.g. "1-1024", "22,80,443"). We validate format (digits, commas, hyphens; ports 1–65535) and run nmap -sS -p &lt;range&gt;. No fixed ranges.
 
-- **Before any scan:** menu = [host_reachability, wait, done].
-- **After host_reachability with host_reachability == "up":** menu = [port_scan_1_100, port_scan_1_1000, port_scan_1_65535, service_detect, os_fingerprint, wait, done]. Optionally omit service_detect until at least one port_scan has run; for v1 keep all in menu once host is up.
-- **After host_reachability with host_reachability == "no_response":** menu = [wait, done] only.
-- **Any other state:** menu = full set minus host_reachability (we already ran it): [port_scan_1_100, port_scan_1_1000, port_scan_1_65535, service_detect, os_fingerprint, wait, done].
-
-**Engine mapping (action_id → execution):**
-
-| action_id | Type | Execution |
-|-----------|------|-----------|
-| host_reachability | nmap | `nmap -sn --host-timeout <timeout_sec> -oX - <target>`. timeout_sec from config or 300. No -p. |
-| wait | wait | Sleep min(reply reason or config cooling_seconds, 60). Append to scans_run. Do not increment nmap_run_count. |
-| done | done | Exit loop; do not run nmap. |
-| port_scan_1_100 | nmap | `nmap -sS -p 1-100 -T3 --host-timeout 300 -oX - <target>`. If run_nmap_sudo: use sudo -n. |
-| port_scan_1_1000 | nmap | `nmap -sS -p 1-1000 -T3 --host-timeout 300 -oX - <target>`. |
-| port_scan_1_65535 | nmap | `nmap -sS -p 1-65535 -T3 --host-timeout 300 -oX - <target>`. |
-| service_detect | nmap | `nmap -sS -sV -p 1-65535 -T3 --host-timeout 300 -oX - <target>`. (Fixed range for v1; can later use state.open_ports.) |
-| os_fingerprint | nmap | `nmap -O --host-timeout 300 -oX - <target>`. No -p. |
+**Engine mapping:** host_reachability → -sn -oX -; wait/done → no nmap; port_scan → -sS -p &lt;port_range&gt;; service_detect → -sV -p &lt;open_ports&gt; (or 1-65535 if none); os_fingerprint → -O, optionally -p &lt;few open + one closed&gt;. Port scan and service_detect require run_nmap_sudo: true.
 
 **Target:** Always the resolved config target. Never from AI.
 

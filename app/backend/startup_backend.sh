@@ -3,6 +3,9 @@
 # Port: 12001 (see port_registry.yaml / port_table.md).
 # Usage: from dev/app/ run ./backend/startup_backend.sh
 # Implementation: start FastAPI/Flask app; see implementation_design.md.
+#
+# Run as normal user (do not use sudo). For SYN scan, set run_nmap_sudo: true
+# in config/scan_config.yaml and allow passwordless sudo for nmap only (see config comments).
 set -e
 clear
 

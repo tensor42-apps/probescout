@@ -9,48 +9,77 @@
   <body>
     <div id="app">
       <header class="app-header">
-        <h1>ProbeScout</h1>
-        <p class="tagline">AI-driven single-target recon. Backend drives all steps. Timestamps &amp; log from backend.</p>
+        <div class="header-row">
+          <h1>ProbeScout</h1>
+          <nav class="nav-tabs" aria-label="Main navigation">
+            <button type="button" class="nav-tab nav-tab-active" id="tab-scan" aria-selected="true">Scan</button>
+            <button type="button" class="nav-tab" id="tab-log" aria-selected="false">Log</button>
+          </nav>
+        </div>
+        <p class="tagline">AI-driven single-target recon. Run a scan, then open Log for the full step log.</p>
       </header>
-      <div class="panels">
-        <section class="panel panel-controls" aria-label="Controls and status">
-          <div class="panel-title">1. Controls &amp; status</div>
+      <div id="view-scan" class="view view-scan" role="main">
+        <div id="scan-complete-banner" class="scan-complete-banner" hidden aria-live="polite">Scan complete — see Results below.</div>
+        <div class="panels">
+          <section class="panel panel-controls" aria-label="Controls and status">
+            <div class="panel-title">1. Controls &amp; status</div>
+            <div class="panel-body">
+              <label for="target">Target (IP or hostname)</label>
+              <input id="target" type="text" value="scanme.nmap.org" placeholder="IP or hostname" autocomplete="off" />
+              <label for="goal">Goal</label>
+              <select id="goal" aria-label="Scan goal">
+                <option value="simple_recon">Simple recon scan</option>
+                <option value="well_known_tcp">Well known TCP scan</option>
+                <option value="full_stealth_tcp">Full Stealth TCP scan on all ports</option>
+              </select>
+              <p id="goal-description" class="goal-description" aria-live="polite"></p>
+              <div class="control-buttons">
+                <button id="execute" type="button" class="btn-primary">Execute</button>
+                <button id="copy-report" type="button">Copy report</button>
+              </div>
+              <div id="status-line" class="status-line" aria-live="polite">Idle</div>
+              <div id="current-activity" class="current-activity" aria-live="polite"></div>
+              <div id="api-status" class="api-status" aria-live="polite"></div>
+            </div>
+          </section>
+          <section class="panel panel-progress" aria-label="Progress">
+            <div class="panel-title">2. Progress</div>
+            <p class="panel-hint">Steps = LLM turns. Stages = completed actions; current step shows as "(running…)" until it finishes.</p>
+            <div class="panel-body">
+              <pre id="progress-text" class="progress-pre">—</pre>
+            </div>
+          </section>
+          <section class="panel panel-stages" aria-label="Stages">
+            <div class="panel-title">3. Stages</div>
+            <div class="panel-body">
+              <div id="stages-list" class="stages-list"></div>
+            </div>
+          </section>
+          <section class="panel panel-output" aria-label="Output">
+            <div class="panel-title">4. Output</div>
+            <div class="panel-body">
+              <pre id="output-text" class="output-pre">—</pre>
+            </div>
+          </section>
+        </div>
+        <section id="panel-results" class="panel panel-results" hidden aria-label="Results">
+          <div class="panel-title">5. Results</div>
           <div class="panel-body">
-            <label for="target">Target (IP or hostname)</label>
-            <input id="target" type="text" value="scanme.nmap.org" placeholder="IP or hostname" autocomplete="off" />
-            <button id="execute" type="button">Execute</button>
-            <button id="copy-report" type="button">Copy report to clipboard</button>
-            <div id="status-line" class="status-line" aria-live="polite">Idle</div>
-            <div id="current-activity" class="current-activity" aria-live="polite"></div>
-            <div id="api-status" class="api-status" aria-live="polite"></div>
+            <div id="results-content" class="results-content">—</div>
           </div>
         </section>
-        <section class="panel panel-progress" aria-label="Progress">
-          <div class="panel-title">2. Progress</div>
-          <p class="panel-hint">Steps = LLM decision rounds (ask → run action). Stages = completed actions with output (host check, port scan, wait). Choosing "done" ends the scan and does not add a stage.</p>
-          <div class="panel-body">
-            <pre id="progress-text" class="progress-pre">—</pre>
+      </div>
+      <div id="view-log" class="view view-log" role="main" hidden>
+        <div class="log-page">
+          <div class="log-page-toolbar">
+            <span class="log-page-title">Log (step = LLM turn)</span>
+            <button type="button" id="copy-log-btn" class="btn-secondary">Copy report</button>
+            <button type="button" id="back-to-scan-btn" class="btn-secondary">Back to Scan</button>
           </div>
-        </section>
-        <section class="panel panel-stages" aria-label="Stages">
-          <div class="panel-title">3. Stages (completed actions)</div>
-          <div class="panel-body">
-            <div id="stages-list" class="stages-list"></div>
-          </div>
-        </section>
-        <section class="panel panel-output" aria-label="Output">
-          <div class="panel-title">4. Output</div>
-          <div class="panel-body">
-            <pre id="output-text" class="output-pre">—</pre>
-          </div>
-        </section>
-        <section class="panel panel-log" id="panel-log" aria-label="Log">
-          <div class="resize-handle resize-handle-log" id="resize-handle-log" title="Drag to resize Log panel"></div>
-          <div class="panel-title">5. Log (step = LLM turn)</div>
-          <div class="panel-body">
+          <div class="log-page-body">
             <pre id="log-text" class="log-pre">—</pre>
           </div>
-        </section>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

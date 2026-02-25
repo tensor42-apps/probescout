@@ -3,7 +3,7 @@ target: scanme.nmap.org
 llm:
   type: remote
   openai_api_key_file: config/openai.key.ignore
-run_nmap_sudo: false
+run_nmap_sudo: true
 nmap_execution: true
 cooling: true
 cooling_seconds: 4

@@ -128,4 +128,8 @@ def get_openai_api_key() -> str:
 
 
 def get_goal_text() -> str:
-    return _get("goal_text") or "Find open ports, identify services and versions, and perform OS fingerprint on the target."
+    from goal import DEFAULT_GOAL_TEXT
+    custom = _get("goal_text")
+    if custom and isinstance(custom, str) and custom.strip():
+        return custom.strip()
+    return DEFAULT_GOAL_TEXT

@@ -1,13 +1,20 @@
 /**
  * Frontend: view only. All state from backend API.
- * 5-panel layout: Controls & status | Progress | Stages | Output | Log (timestamps & log from backend)
+ * Scan view: 4 panels (Controls, Progress, Stages, Output). Log: separate page.
  */
 // When on localhost, always talk to backend on 12001 so we don't depend on proxy.
 const API_BASE = (typeof location !== 'undefined' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1'))
   ? 'http://127.0.0.1:12001'
   : '';
 
+const POLL_INTERVAL_MS = 1500;
+const POLL_INTERVAL_WHILE_RUNNING_MS = 500; // faster updates for live output
+const POLL_INTERVAL_STREAM_BURST_MS = 200; // first few polls when step is running (to catch first line)
+const POLL_STREAM_BURST_COUNT = 8; // poll at 200ms for ~1.6s, then 500ms
+const STATUS_FETCH_TIMEOUT_MS = 25000;
+
 const targetEl = document.getElementById('target');
+const goalEl = document.getElementById('goal');
 const executeBtn = document.getElementById('execute');
 const statusLineEl = document.getElementById('status-line');
 const progressEl = document.getElementById('progress-text');
@@ -17,6 +24,12 @@ const logEl = document.getElementById('log-text');
 const apiStatusEl = document.getElementById('api-status');
 const currentActivityEl = document.getElementById('current-activity');
 const copyReportBtn = document.getElementById('copy-report');
+const scanCompleteBanner = document.getElementById('scan-complete-banner');
+const panelResults = document.getElementById('panel-results');
+const resultsContent = document.getElementById('results-content');
+const goalDescriptionEl = document.getElementById('goal-description');
+
+let goalsWithDescriptions = [];
 
 async function pingBackend() {
   const url = `${API_BASE}/api/ping`;
@@ -29,12 +42,14 @@ async function pingBackend() {
   }
 }
 
-async function postScan(target) {
+async function postScan(target, goal) {
   const url = `${API_BASE}/api/scan`;
   if (apiStatusEl) apiStatusEl.textContent = `Sending POST to ${url}…`;
-  console.log('[ProbeScout] POST', url);
-  // Form-encoded body avoids CORS preflight (OPTIONS); JSON POST triggers preflight which may not reach backend.
-  const body = 'target=' + encodeURIComponent(target.trim());
+  console.log('[ProbeScout] POST', url, 'goal=', goal);
+  const params = new URLSearchParams();
+  params.set('target', target.trim());
+  if (goal) params.set('goal', goal);
+  const body = params.toString();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   const res = await fetch(url, {
@@ -53,7 +68,11 @@ async function postScan(target) {
 }
 
 async function getStatus() {
-  const res = await fetch(`${API_BASE}/api/scan/status`);
+  const url = `${API_BASE}/api/scan/status`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), STATUS_FETCH_TIMEOUT_MS);
+  const res = await fetch(url, { signal: controller.signal });
+  clearTimeout(timeoutId);
   if (!res.ok) throw new Error(`Status failed: ${res.status}`);
   return res.json();
 }
@@ -61,9 +80,7 @@ async function getStatus() {
 function humanLabel(actionId) {
   const labels = {
     host_reachability: 'Host reachability',
-    port_scan_1_100: 'Port scan 1–100',
-    port_scan_1_1000: 'Port scan 1–1000',
-    port_scan_1_65535: 'Port scan 1–65535',
+    port_scan: 'Port scan',
     service_detect: 'Service detection',
     os_fingerprint: 'OS fingerprint',
     wait: 'Wait',
@@ -81,18 +98,23 @@ function setStatusLine(status, step, currentAction, errorMsg, lastLog, maxSteps)
     statusLineEl.classList.add('running');
     const stepPart = (step != null && maxSteps != null) ? `step ${step}/${maxSteps}` : (step != null ? `step ${step}` : '');
     const actionPart = currentAction ? humanLabel(currentAction) : '';
-    const logPart = lastLog || '';
-    const parts = [stepPart, actionPart, logPart].filter(Boolean);
+    const parts = [stepPart, actionPart].filter(Boolean);
     statusLineEl.textContent = parts.length ? `Running — ${parts.join(' · ')}` : 'Running…';
   } else if (status === 'done') {
     statusLineEl.classList.add('done');
     const doneStep = (step != null && maxSteps != null) ? ` (${step}/${maxSteps} steps)` : '';
-    statusLineEl.textContent = `Done${doneStep}`;
+    statusLineEl.textContent = `Scan complete${doneStep}`;
+    if (scanCompleteBanner) scanCompleteBanner.hidden = false;
   } else if (status === 'error') {
     statusLineEl.classList.add('error');
     statusLineEl.textContent = errorMsg ? `Error: ${errorMsg}` : 'Error';
+    if (scanCompleteBanner) scanCompleteBanner.hidden = true;
   } else {
     statusLineEl.textContent = status || '—';
+    if (scanCompleteBanner) scanCompleteBanner.hidden = true;
+  }
+  if (status === 'idle' || status === 'running') {
+    if (scanCompleteBanner) scanCompleteBanner.hidden = true;
   }
 }
 
@@ -119,9 +141,10 @@ function setProgress(data) {
   progressEl.textContent = lines.join('\n');
 }
 
-function renderStagesList(stages = [], currentAction, onSelectStage) {
+function renderStagesList(stages = [], currentAction, onSelectStage, inProgressActionId) {
   stagesListEl.innerHTML = '';
-  if (!stages.length) {
+  const hasInProgress = inProgressActionId && !stages.some((s) => s.action_id === inProgressActionId);
+  if (!stages.length && !hasInProgress) {
     stagesListEl.innerHTML = '<span class="muted">No stages yet.</span>';
     return;
   }
@@ -144,11 +167,72 @@ function renderStagesList(stages = [], currentAction, onSelectStage) {
     }
     stagesListEl.appendChild(div);
   }
+  if (hasInProgress) {
+    const div = document.createElement('div');
+    div.className = 'stage-item stage-item-in-progress current';
+    div.innerHTML = `
+      <span class="stage-label">${humanLabel(inProgressActionId)}</span>
+      <span class="stage-id">${inProgressActionId}</span>
+      <span class="stage-started">(running…)</span>
+    `;
+    div.dataset.index = stages.length;
+    if (onSelectStage) {
+      div.style.cursor = 'pointer';
+      div.addEventListener('click', () => onSelectStage(stages.length));
+    }
+    stagesListEl.appendChild(div);
+  }
 }
 
 function setOutput(text) {
-  outputEl.textContent = text || '';
-  outputEl.classList.toggle('empty', !text || text.trim() === '');
+  const next = text || '';
+  const current = (outputEl.textContent ?? '');
+  if (next !== current) {
+    outputEl.textContent = next;
+  }
+  outputEl.classList.toggle('empty', !next || next.trim() === '');
+}
+
+function setResults(results) {
+  if (!panelResults || !resultsContent) return;
+  if (!results) {
+    panelResults.hidden = true;
+    resultsContent.textContent = '';
+    return;
+  }
+  panelResults.hidden = false;
+  const lines = [];
+  lines.push(`Target:        ${results.target || '—'}`);
+  lines.push(`Host:          ${results.host_addr || results.hostname || '—'}`);
+  if (results.hostname && results.hostname !== (results.host_addr || '')) {
+    lines.push(`Hostname:      ${results.hostname}`);
+  }
+  lines.push(`Reachability:  ${results.host_reachability || '—'}`);
+  lines.push(`OS fingerprint: ${results.os_fingerprint_done ? 'done' : '—'}`);
+  if (results.os_guess) {
+    lines.push(`OS guess:      ${results.os_guess}`);
+  }
+  lines.push('');
+  lines.push('Open ports:');
+  if (results.open_ports && results.open_ports.length > 0) {
+    for (const p of results.open_ports) {
+      lines.push(`  ${p.port}/${p.proto || 'tcp'}`);
+    }
+  } else {
+    lines.push('  (none)');
+  }
+  lines.push('');
+  lines.push('Services:');
+  if (results.services && results.services.length > 0) {
+    for (const s of results.services) {
+      const svc = (s.service || '').trim() || '—';
+      const ver = (s.version || '').trim();
+      lines.push(`  ${s.port}/${s.proto || 'tcp'}: ${svc}${ver ? ' ' + ver : ''}`);
+    }
+  } else {
+    lines.push('  (none)');
+  }
+  resultsContent.textContent = lines.length ? lines.join('\n') : '—';
 }
 
 function setLog(logLines) {
@@ -170,8 +254,9 @@ function copyReportToClipboard() {
     ? Array.from(stageItems).map((el) => el.textContent.trim()).join('\n')
     : 'No stages yet.';
   const outputText = (outputEl && outputEl.textContent) ? outputEl.textContent.trim() : '—';
+  const resultsText = (resultsContent && resultsContent.textContent) ? resultsContent.textContent.trim() : '';
   const logText = (logEl && logEl.textContent) ? logEl.textContent.trim() : '—';
-  const report = [
+  const reportParts = [
     '2. Progress',
     '---',
     progressText,
@@ -183,11 +268,16 @@ function copyReportToClipboard() {
     '4. Output',
     '---',
     outputText,
-    '',
-    '5. Log (step = LLM turn)',
+  ];
+  if (resultsText) {
+    reportParts.push('', '5. Results', '---', resultsText, '');
+  }
+  reportParts.push(
+    reportParts.length > 1 && resultsText ? '6. Log (step = LLM turn)' : '5. Log (step = LLM turn)',
     '---',
-    logText,
-  ].join('\n');
+    logText
+  );
+  const report = reportParts.join('\n');
   navigator.clipboard.writeText(report).then(
     () => {
       if (copyReportBtn) {
@@ -204,49 +294,97 @@ function copyReportToClipboard() {
 
 let pollTimer = null;
 let selectedStageIndex = -1;
+let pollCount = 0;
 
 function stopPolling() {
   if (pollTimer) {
     clearTimeout(pollTimer);
     pollTimer = null;
   }
+  pollCount = 0;
 }
 
 function startPolling() {
   stopPolling();
   selectedStageIndex = -1;
+  pollCount = 0;
   function poll() {
+    pollCount += 1;
+    console.log('[ProbeScout] GET /api/scan/status');
     getStatus()
       .then((data) => {
-        setStatusLine(
-          data.status,
-          data.step,
-          data.current_action,
-          data.error,
-          data.last_log,
-          data.max_steps
-        );
-        setProgress(data);
-        setLog(data.log_lines);
-        const stages = data.stages || [];
-        renderStagesList(stages, data.current_action, (index) => {
-          selectedStageIndex = index;
-          setOutput(stages[index]?.output ?? '');
-        });
-        if (stages.length > 0) {
-          const idx =
-            selectedStageIndex >= 0 && selectedStageIndex < stages.length
-              ? selectedStageIndex
-              : stages.length - 1;
-          setOutput(stages[idx].output ?? '');
-        } else {
-          setOutput('');
+        try {
+          setStatusLine(
+            data.status,
+            data.step,
+            data.current_action,
+            data.error,
+            data.last_log,
+            data.max_steps
+          );
+          setProgress(data);
+          setLog(data.log_lines);
+          const stages = data.stages || [];
+        const inProgress =
+          data.status === 'running' &&
+          data.current_action &&
+          !stages.some((s) => s.action_id === data.current_action);
+        const stepDetail = (inProgress && data.current_step_detail) ? ` (${data.current_step_detail})` : '';
+        const commandBlock = (inProgress && data.current_command) ? `$ ${data.current_command}\n\n` : '';
+        const runningMessage =
+          inProgress &&
+          `${commandBlock}Running: ${humanLabel(data.current_action)}${stepDetail}…\n\nOutput will appear when this step completes.`;
+        const stepOutput = typeof data.current_step_output === 'string' ? data.current_step_output : '';
+        const hasLiveOutput = inProgress && stepOutput.trim().length > 0;
+        if (inProgress && stepOutput.length > 0) {
+          console.log('[ProbeScout] status: running, current_step_output length=', stepOutput.length);
         }
-        if (data.status === 'running') {
-          pollTimer = setTimeout(poll, 1500);
-        } else {
-          stopPolling();
-          executeBtn.disabled = false;
+        const liveOutput =
+          hasLiveOutput
+            ? `${commandBlock}Running: ${humanLabel(data.current_action)}${stepDetail}…\n\n${stepOutput}`
+            : runningMessage;
+          renderStagesList(stages, data.current_action, (index) => {
+            selectedStageIndex = index;
+          if (inProgress && index === stages.length) {
+            const cmd = (data.current_command) ? `$ ${data.current_command}\n\n` : '';
+            const live = stepOutput.trim();
+            setOutput(
+              live
+                ? `${cmd}Running: ${humanLabel(data.current_action)}…\n\n${stepOutput}`
+                : runningMessage
+            );
+          } else {
+              setOutput(stages[index]?.output ?? '');
+            }
+          }, inProgress ? data.current_action : null);
+          if (inProgress) {
+            selectedStageIndex = stages.length;
+            setOutput(liveOutput);
+          } else if (stages.length > 0) {
+            const idx =
+              selectedStageIndex >= 0 && selectedStageIndex < stages.length
+                ? selectedStageIndex
+                : stages.length - 1;
+            selectedStageIndex = idx;
+            setOutput(stages[idx].output ?? '');
+          } else {
+            setOutput('');
+          }
+          if (data.status === 'done' && data.results) {
+            setResults(data.results);
+          } else {
+            setResults(null);
+          }
+        } finally {
+          if (data && data.status === 'running') {
+            const interval = pollCount <= POLL_STREAM_BURST_COUNT
+              ? POLL_INTERVAL_STREAM_BURST_MS
+              : POLL_INTERVAL_WHILE_RUNNING_MS;
+            pollTimer = setTimeout(poll, interval);
+          } else {
+            stopPolling();
+            executeBtn.disabled = false;
+          }
         }
       })
       .catch((err) => {
@@ -263,6 +401,7 @@ function startPolling() {
 executeBtn.addEventListener('click', async () => {
   const target = targetEl.value?.trim();
   if (!target) return;
+  const goal = goalEl?.value?.trim() || '';
   executeBtn.disabled = true;
   setStatusLine('running');
   setProgress({ target, status: 'running', step: 0 });
@@ -271,7 +410,7 @@ executeBtn.addEventListener('click', async () => {
   setLog([]);
   if (currentActivityEl) currentActivityEl.textContent = 'Starting scan…';
   try {
-    await postScan(target);
+    await postScan(target, goal);
     startPolling();
   } catch (err) {
     console.error('Execute failed:', err);
@@ -293,53 +432,78 @@ function setApiStatus(text, isError) {
   apiStatusEl.className = 'api-status' + (isError ? ' api-status-error' : '');
 }
 
-(function setupLogPanelResize() {
-  const handle = document.getElementById('resize-handle-log');
-  const panel = document.getElementById('panel-log');
-  if (!handle || !panel) return;
-  const MIN_H = 160;
-  const MAX_H = 600;
-  let startY = 0;
-  let startH = 0;
+// Tab navigation: Scan | Log
+const viewScan = document.getElementById('view-scan');
+const viewLog = document.getElementById('view-log');
+const tabScan = document.getElementById('tab-scan');
+const tabLog = document.getElementById('tab-log');
+const backToScanBtn = document.getElementById('back-to-scan-btn');
+const copyLogBtn = document.getElementById('copy-log-btn');
 
-  handle.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    startY = e.clientY;
-    startH = panel.offsetHeight;
-    const onMove = (e2) => {
-      const dy = e2.clientY - startY;
-      let h = Math.round(startH + dy);
-      h = Math.max(MIN_H, Math.min(MAX_H, h));
-      panel.style.height = h + 'px';
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-})();
-
-if (copyReportBtn) {
-  copyReportBtn.addEventListener('click', copyReportToClipboard);
+function showView(name) {
+  const isScan = name === 'scan';
+  if (viewScan) viewScan.hidden = !isScan;
+  if (viewLog) viewLog.hidden = isScan;
+  if (tabScan) {
+    tabScan.classList.toggle('nav-tab-active', isScan);
+    tabScan.setAttribute('aria-selected', isScan);
+  }
+  if (tabLog) {
+    tabLog.classList.toggle('nav-tab-active', !isScan);
+    tabLog.setAttribute('aria-selected', !isScan);
+  }
 }
+
+if (tabScan) tabScan.addEventListener('click', () => showView('scan'));
+if (tabLog) tabLog.addEventListener('click', () => showView('log'));
+if (backToScanBtn) backToScanBtn.addEventListener('click', () => showView('scan'));
+if (copyReportBtn) copyReportBtn.addEventListener('click', copyReportToClipboard);
+if (copyLogBtn) copyLogBtn.addEventListener('click', copyReportToClipboard);
+
+function updateGoalDescription() {
+  if (!goalDescriptionEl || !goalEl) return;
+  const id = goalEl.value || '';
+  const g = goalsWithDescriptions.find((x) => x.id === id);
+  goalDescriptionEl.textContent = g && g.description ? g.description : '';
+}
+
+async function fetchGoalsAndPopulateDropdown() {
+  const url = `${API_BASE}/api/goals`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const goals = data.goals;
+    if (goalEl && Array.isArray(goals) && goals.length > 0) {
+      goalsWithDescriptions = goals;
+      goalEl.innerHTML = goals.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.label)}</option>`).join('');
+      updateGoalDescription();
+    }
+  } catch (_) {
+    // Keep static options from HTML
+  }
+}
+
+if (goalEl) goalEl.addEventListener('change', updateGoalDescription);
 
 (async function init() {
   setStatusLine('idle');
   setProgress({ target: targetEl.value?.trim() || '—', status: 'idle' });
   renderStagesList([]);
   setOutput('');
+  updateGoalDescription();
 
   if (API_BASE) {
     setApiStatus(`API: ${API_BASE} — checking…`, false);
     const ping = await pingBackend();
     if (ping && ping.ok && ping.pid) {
       setApiStatus(`API: ${API_BASE} • Backend connected (PID ${ping.pid})`, false);
+      await fetchGoalsAndPopulateDropdown();
     } else {
       setApiStatus(`API: ${API_BASE} • Backend not reachable. Start backend on port 12001.`, true);
     }
   } else {
     setApiStatus('API: same origin', false);
+    await fetchGoalsAndPopulateDropdown();
   }
 })();

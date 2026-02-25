@@ -141,7 +141,7 @@ The following table maps the canonical intent above to the earlier design and co
 
 **First action is always host reachability:** check if the host responds (e.g. nmap `-sn` host discovery, or equivalent). Until we know the host is reachable, we don’t proceed to port scans or service detection.
 
-- **If the host responds:** State is updated to “host up”. We are sure it’s up; the loop can then offer port-scan and later actions. AI can choose next (e.g. port_scan_1_100, service_detect, etc.) based on state and goal.
+- **If the host responds:** State is updated to “host up”. We are sure it’s up; the loop can then offer port-scan and later actions. AI can choose next (e.g. port_scan with range "1-1024", service_detect, etc.) based on state and goal.
 - **If the host does not respond:** State reflects “no response” (or “down” / “filtered” depending on what we infer). There can be other reasons: firewall, wrong IP, host actually down, network issue. The **decision loop** handles this: the AI sees “host did not respond” in state and can choose e.g. `done` (give up), `wait` (retry later), or we can add a limited retry policy in the engine. We do not assume “no response = down” blindly; we represent it in state and let the agent (and policy) reason about it.
 
 **Building the decision loop gradually:**

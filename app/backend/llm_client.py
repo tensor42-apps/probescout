@@ -1,6 +1,9 @@
 """
 OpenAI-compatible chat API. Implementation design §5, §10.
 """
+from pathlib import Path
+from typing import Optional
+
 import config_loader
 
 
@@ -31,10 +34,11 @@ def validate_api_key() -> None:
 CHAT_TIMEOUT = 90.0
 
 
-def chat(system: str, user: str) -> str:
+def chat(system: str, user: str, log_path: Optional[Path] = None) -> str:
     """
     Call OpenAI-compatible API; return response content (first choice message content).
     API key from config_loader. Raises on timeout or API error.
+    If log_path is set, append full request (system + user) and response to the file for debugging.
     """
     try:
         api_key = config_loader.get_openai_api_key()
@@ -55,5 +59,21 @@ def chat(system: str, user: str) -> str:
     )
     choice = response.choices[0] if response.choices else None
     if choice is None or choice.message is None:
-        return ""
-    return (choice.message.content or "").strip()
+        content = ""
+    else:
+        content = (choice.message.content or "").strip()
+
+    if log_path is not None:
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write("=== REQUEST (system) ===\n")
+                f.write(system)
+                f.write("\n--- REQUEST (user) ---\n")
+                f.write(user)
+                f.write("\n=== RESPONSE ===\n")
+                f.write(content)
+                f.write("\n\n")
+        except OSError:
+            pass
+
+    return content

@@ -1,14 +1,24 @@
 # ProbeScout scan config. Override target via API when starting a scan.
 # See implementation_design.md §2.
+#
+# run_nmap_sudo: must be true for port scans and service detection (TCP SYN scan -sS only).
+#   Do NOT run the whole backend with sudo. Instead:
+#   1. Set run_nmap_sudo: true below.
+#   2. Allow passwordless nmap only, e.g. in /etc/sudoers.d/probescout:
+#      youruser ALL=(ALL) NOPASSWD: /usr/bin/nmap
+#   3. Start the backend as normal user: ./backend/startup_backend.sh
+#   If false, port scans and service_detect will raise an error (SYN scan required).
 
 target: scanme.nmap.org
 llm:
   type: remote
   openai_api_key_file: config/openai.key.ignore
-run_nmap_sudo: false
+run_nmap_sudo: true   # set true only after adding NOPASSWD for nmap in sudoers (see comments above)
 nmap_execution: true
 cooling: true
 cooling_seconds: 4
 max_steps: 30
 max_nmap_runs: 25
 max_elapsed_seconds: 3600
+
+# Optional: goal_text: "custom goal string". Else DEFAULT_GOAL_TEXT (intent-based, no fixed menu).
